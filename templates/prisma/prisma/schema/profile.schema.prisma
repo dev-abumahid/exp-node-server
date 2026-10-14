@@ -1,0 +1,13 @@
+model Profile {
+    // PK
+    id        String @id @default(uuid())
+    
+    // FK
+    accountId String @unique
+
+    fullName     String
+    profilePhoto String?
+
+    // Relation
+    account      Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+}

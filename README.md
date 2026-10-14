@@ -1,0 +1,188 @@
+# ⚡ Express Server CLI
+
+[![npm version](https://img.shields.io/npm/v/exp-node-server.svg)](https://www.npmjs.com/package/exp-node-server)
+[![npm downloads](https://img.shields.io/npm/dw/exp-node-server.svg)](https://www.npmjs.com/package/exp-node-server)
+[![npm total downloads](https://img.shields.io/npm/dt/exp-node-server.svg)](https://www.npmjs.com/package/exp-node-server)
+[![Made with TypeScript](https://img.shields.io/badge/Made%20with-TypeScript-blue.svg)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-20.17+-green.svg)](https://nodejs.org/)
+
+---
+
+## 🚀 Overview
+
+A powerful `Express + TypeScript CLI` that instantly generates scalable `backend` modules with `Mongoose `/ `Prisma`, `Zod` `validation`, and `Swagger` documentation.
+
+This tool helps developers quickly scaffold `clean`, `modular` `Express` APIs with minimal setup.
+
+## ✨ Features
+
+- ⚡ Generate complete `Express` + `TypeScript` modules
+- 🧩 Built-in `Mongoose` / `Prisma` support
+- 📘 Automatic `Swagger` documentation
+- 🔐 `Zod` validation ready
+- 🏗️ `Modular` clean architecture
+- 🚀 One command project setup
+- 🔄 Add modules anytime
+- 📦 Zero boilerplate setup
+
+## 📦 Quick Start
+
+Run directly using npx (recommended):
+
+```bash
+npx exp-node-server -c my-api
+```
+
+You'll be asked to pick a template (Mongoose or Prisma). To skip the prompt:
+
+```bash
+npx exp-node-server create my-api --template prisma
+```
+
+Then:
+
+```bash
+cd my-api
+npm install
+npm run dev
+```
+
+## 🧩 Generate a Module
+
+Inside your project root run:
+
+```bash
+npx exp-node-server -g <module-name>
+```
+
+Example: `npx exp-node-server -g order`
+
+Output:
+
+```bash
+✔ src/app/modules/order/order.controller.ts created
+✔ src/app/modules/order/order.route.ts created
+✔ src/app/modules/order/order.validation.ts created
+✔ src/app/modules/order/order.swagger.ts created
+✔ src/app/modules/order/order.interface.ts created
+✔ src/app/modules/order/order.schema.ts created
+✔ src/app/modules/order/order.service.ts created
+✔ tests/routes/order.test.ts created
+✔ Route registered in routes.ts
+✔ Swagger docs registered in swaggerOptions.ts
+```
+
+The route and Swagger docs are wired up automatically. For Prisma projects a
+`prisma/schema/<module>.prisma` model is created as well.
+
+A ready-to-run [supertest](https://github.com/ladjs/supertest) suite is created in
+`tests/routes/<module>.test.ts`. It covers create, list, get, update and delete,
+including the 404s, and passes as generated:
+
+```bash
+npm test -- tests/routes/order.test.ts
+```
+
+When you add fields, fill in `createPayload` / `updatePayload` at the top of the test.
+Mongoose tests run against an in-memory MongoDB; Prisma tests use the Prisma mock in
+`tests/helpers/prisma.ts`. Module names whose path is already taken (e.g. `auth`) are
+refused.
+
+## 🛠️ CLI Reference
+
+```text
+npx exp-node-server create <project-name> [--template <mongoose|prisma>]
+npx exp-node-server generate <module-name> [--force]
+
+Commands
+  create, -c <name>      Create a new project from a template
+  generate, -g <name>    Generate a module in the current project
+
+Options
+  -t, --template <name>  Template to use with create (mongoose | prisma)
+  -f, --force            Overwrite an existing module when generating
+  -h, --help             Show help
+  -v, --version          Show version
+```
+
+- Project names are lowercased and spaces become dashes (`My API` → `my-api`).
+- Module names are lowercased and spaces/dashes become underscores (`order-item` → `order_item`).
+
+## 📁 Generated Module Structure
+
+Each module follows a clean structure:
+
+```Bash
+src/app/modules/<module-name>/
+ ├── <module>.interface.ts    # mongoose
+ ├── <module>.schema.ts       # mongoose (prisma: prisma/schema/<module>.prisma)
+ ├── <module>.validation.ts
+ ├── <module>.route.ts
+ ├── <module>.controller.ts
+ ├── <module>.service.ts
+ └── <module>.swagger.ts
+
+tests/routes/
+ └── <module>.test.ts
+```
+
+## ⚙️ Run the Project
+
+```bash
+npm run dev
+```
+
+Swagger docs available at:
+
+```bash
+http://localhost:5000/docs
+```
+
+## 🧠 Tech Stack
+
+- Express.js — Backend framework
+- TypeScript — Strongly typed JavaScript
+- Mongoose — MongoDB ODM
+- Prisma — PostgreSQL ORM
+- Zod — Runtime schema validation
+- JWT — Authentication
+- Swagger — API documentation
+
+## 🧑‍🔧 Development
+
+```bash
+npm install
+npm run dev        # rebuild on change (tsup --watch)
+npm run typecheck  # tsc
+npm test           # vitest (unit + end-to-end against dist/)
+npm run build      # bundle to dist/cli.js
+```
+
+Try the local build with `node dist/cli.js --help`, or run `npm link` to use
+`exp-node-server` globally.
+
+> Templates live in `templates/`. npm strips `.gitignore` files when
+> publishing, so name them `_gitignore`. They're renamed when a project is created.
+
+## 👨‍💻 Author
+
+### Abumahid
+
+GitHub
+https://github.com/dev-abumahid
+
+npm
+https://www.npmjs.com/~dev_abumahid
+
+Portfolio
+https://abumahid.me
+
+LinkedIn
+https://linkedin.com/in/md-abu-mahid-islam
+
+## ⭐ Support
+
+If you find this project helpful, consider giving it a ⭐ on `GitHub`.
+
+It helps the project grow and reach more developers.
+

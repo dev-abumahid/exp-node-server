@@ -1,0 +1,101 @@
+enum ROLE {
+    ADMIN
+    USER
+}
+
+enum PROVIDER {
+    LOCAL
+    GOOGLE
+    FACEBOOK
+    GITHUB
+    TWITTER
+    LINKEDIN
+    DISCORD
+}
+
+model Account {
+    // PK
+    id                 String    @id @default(uuid())
+    email              String    @unique
+    password           String?
+    // provider the account was created with
+    provider           PROVIDER  @default(LOCAL)
+    role               ROLE      @default(USER)
+    isDeleted          Boolean   @default(false)
+    isAccountVerified  Boolean   @default(false)
+    // bumped on password change/reset and "sign out everywhere"; access tokens
+    // and reset links carrying an older version stop working
+    tokenVersion       Int       @default(0)
+
+    // email verification (the OTP is stored as an HMAC, never in plain text)
+    lastOtp            String?
+    lastOtpSendingTime DateTime?
+    otpAttempts        Int       @default(0)
+
+    createdAt          DateTime  @default(now())
+    updatedAt          DateTime  @updatedAt
+
+    // Relation
+    profile        Profile?
+    socialAccounts SocialAccount[]
+    loginCodes     SocialLoginCode[]
+    refreshTokens  RefreshToken[]
+}
+
+/// Refresh tokens are opaque random strings; only their hash is stored. Every
+/// refresh rotates the token, and all tokens of one sign-in share a `familyId`, so
+/// a stolen token that gets reused can revoke the whole session.
+model RefreshToken {
+    tokenHash    String    @id
+    accountId    String
+    familyId     String
+    // the account's tokenVersion when issued; a password change makes it stale
+    tokenVersion Int
+    expiresAt    DateTime
+    // set when the token is rotated; kept until expiry to detect reuse
+    usedAt       DateTime?
+    createdAt    DateTime  @default(now())
+
+    account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+    @@index([accountId])
+    @@index([familyId])
+    @@index([expiresAt])
+}
+
+/// A social identity linked to an account. Lookups use the provider's stable user
+/// id, so a login keeps working even if the email at the provider changes.
+model SocialAccount {
+    id             String   @id @default(uuid())
+    accountId      String
+    provider       PROVIDER
+    providerUserId String
+    createdAt      DateTime @default(now())
+
+    account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+    @@unique([provider, providerUserId])
+    @@index([accountId])
+}
+
+/// Single-use code handed to the front-end after a social login, exchanged for an
+/// access token via `POST /api/auth/social/exchange`. Only the hash is stored.
+model SocialLoginCode {
+    codeHash  String   @id
+    accountId String
+    expiresAt DateTime
+    createdAt DateTime @default(now())
+
+    account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+    @@index([expiresAt])
+}
+
+/// Hit counters for the auth rate limiters, shared by every app instance.
+model RateLimit {
+    key     String   @id
+    hits    Int
+    resetAt DateTime
+
+    @@index([resetAt])
+}

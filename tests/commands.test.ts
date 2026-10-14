@@ -1,0 +1,111 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createProject } from "../src/commands/create-project.js";
+import { generateModule } from "../src/commands/generate-module.js";
+import { CliError } from "../src/lib/errors.js";
+import type { Database } from "../src/lib/project-config.js";
+
+let tmp: string;
+
+beforeEach(() => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "exp-node-server-"));
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+});
+
+afterEach(() => {
+    vi.restoreAllMocks();
+    fs.rmSync(tmp, { recursive: true, force: true });
+});
+
+describe.each<Database>(["mongoose", "prisma"])("%s", (template) => {
+    it("creates a project and generates a module in it", async () => {
+        await createProject("my-api", { template, cwd: tmp });
+        const project = path.join(tmp, "my-api");
+
+        expect(fs.existsSync(path.join(project, ".gitignore"))).toBe(true);
+        expect(fs.existsSync(path.join(project, "_gitignore"))).toBe(false);
+        // uploads stream to Cloudinary, nothing is stored on disk
+        expect(fs.existsSync(path.join(project, "uploads"))).toBe(false);
+        expect(JSON.parse(fs.readFileSync(path.join(project, "package.json"), "utf-8")).name).toBe("my-api");
+        // local artifacts of the template folder are never copied
+        for (const artifact of ["node_modules", "dist", "coverage", ".env"]) {
+            expect(fs.existsSync(path.join(project, artifact)), artifact).toBe(false);
+        }
+
+        await generateModule("order", { cwd: project });
+
+        const moduleDir = path.join(project, "src/app/modules/order");
+        const expected = ["controller", "route", "validation", "swagger", "service"];
+        if (template === "mongoose") expected.push("interface", "schema");
+        for (const kind of expected) {
+            expect(fs.existsSync(path.join(moduleDir, `order.${kind}.ts`)), kind).toBe(true);
+        }
+
+        // a route test next to the template's own route tests
+        const test = fs.readFileSync(path.join(project, "tests/routes/order.test.ts"), "utf-8");
+        expect(test).toContain("const BASE = '/api/order';");
+        expect(test).toContain(template === "mongoose" ? "order_model" : "prismaMock.order");
+
+        if (template === "prisma") {
+            const schema = fs.readFileSync(path.join(project, "prisma/schema/order.prisma"), "utf-8");
+            expect(schema).toContain("model Order {");
+        }
+
+        expect(fs.readFileSync(path.join(project, "src/routes.ts"), "utf-8")).toContain("orderRoute");
+        expect(fs.readFileSync(path.join(project, "src/swaggerOptions.ts"), "utf-8")).toContain("...orderSwaggerDocs");
+    });
+});
+
+describe("createProject", () => {
+    it("refuses to overwrite an existing folder", async () => {
+        fs.mkdirSync(path.join(tmp, "my-api"));
+        await expect(createProject("my-api", { template: "mongoose", cwd: tmp })).rejects.toThrow(CliError);
+    });
+});
+
+describe("generateModule", () => {
+    it("fails outside a project", async () => {
+        await expect(generateModule("order", { cwd: tmp })).rejects.toThrow(/\.projectrc\.json not found/);
+    });
+
+    it("rejects an unknown database type", async () => {
+        fs.writeFileSync(path.join(tmp, ".projectrc.json"), JSON.stringify({ database: "sqlite" }));
+        await expect(generateModule("order", { cwd: tmp })).rejects.toThrow(/Invalid "database"/);
+    });
+
+    it("refuses to overwrite an existing module unless forced", async () => {
+        await createProject("my-api", { template: "mongoose", cwd: tmp });
+        const project = path.join(tmp, "my-api");
+        await generateModule("order", { cwd: project });
+
+        await expect(generateModule("order", { cwd: project })).rejects.toThrow(/already exists/);
+        await expect(generateModule("order", { cwd: project, force: true })).resolves.toBeUndefined();
+
+        // forcing doesn't register the route twice
+        const routes = fs.readFileSync(path.join(project, "src/routes.ts"), "utf-8");
+        expect(routes.match(/route: orderRoute/g)).toHaveLength(1);
+    });
+
+    it("refuses a module whose path is taken by another router", async () => {
+        await createProject("my-api", { template: "prisma", cwd: tmp });
+        const project = path.join(tmp, "my-api");
+
+        // the template's account routes are mounted at /auth
+        await expect(generateModule("auth", { cwd: project })).rejects.toThrow(/already used by accountRouter/);
+        expect(fs.existsSync(path.join(project, "src/app/modules/auth"))).toBe(false);
+    });
+
+    it("skips the route test in projects without a test setup", async () => {
+        await createProject("my-api", { template: "mongoose", cwd: tmp });
+        const project = path.join(tmp, "my-api");
+        fs.rmSync(path.join(project, "vitest.config.ts"));
+
+        await generateModule("order", { cwd: project });
+
+        expect(fs.existsSync(path.join(project, "src/app/modules/order/order.route.ts"))).toBe(true);
+        expect(fs.existsSync(path.join(project, "tests/routes/order.test.ts"))).toBe(false);
+    });
+});

@@ -1,0 +1,21 @@
+services:
+  mongo:
+    image: mongo:8.2
+    container_name: server_database
+    restart: always
+
+    # only reachable from this machine (for local dev), not the internet
+    ports:
+      - "127.0.0.1:27017:27017"
+
+    volumes:
+      - mongo_data:/data/db
+
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mongo_data:

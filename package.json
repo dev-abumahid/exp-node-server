@@ -1,0 +1,54 @@
+{
+  "name": "exp-node-server",
+  "version": "2.0.0",
+  "description": "CLI to scaffold Express + TypeScript APIs with Mongoose or Prisma, Zod validation and Swagger docs",
+  "type": "module",
+  "bin": {
+    "exp-node-server": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "templates",
+    "!templates/*/node_modules",
+    "!templates/*/dist",
+    "!templates/*/coverage",
+    "!templates/*/.env"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc -p .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+  },
+  "dependencies": {
+    "@inquirer/select": "^5.2.6",
+    "chalk": "^5.6.2",
+    "ora": "^9.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "tsup": "^8.5.1",
+    "typescript": "^7.0.2",
+    "vitest": "^3.2.7"
+  },
+  "keywords": [
+    "express",
+    "mongoose",
+    "typescript",
+    "cli",
+    "generator",
+    "nodejs",
+    "api",
+    "module-generator",
+    "exp-node-server",
+    "exp-node",
+    "server"
+  ],
+  "author": "Abumahid (https://abumahid.me)",
+  "homepage": "https://www.npmjs.com/package/exp-node-server",
+  "engines": {
+    "node": ">=20.17.0"
+  }
+}

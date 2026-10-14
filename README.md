@@ -134,7 +134,22 @@ including the 404s, and passes as generated:
 npm test -- tests/routes/order.test.ts
 ```
 
-When you add fields, fill in `createPayload` / `updatePayload` at the top of the test.
+Generated modules start with an example `name` field, from the validation to the
+database schema and the tests, so data flows end to end right away. Rename it or add
+your fields in the same places, and update `createPayload` / `updatePayload` at the
+top of the test. These are starter tests: extend them with your business rules.
+
+### Protected routes
+
+Generated routes are **public** by default. To require a signed-in user on every
+route:
+
+```bash
+npx exp-node-server -g order --auth
+```
+
+The generated test then also checks that anonymous requests get a 401. To limit a
+route to admins, change `auth()` to `auth('ADMIN')` in `order.route.ts`.
 Mongoose tests run against an in-memory MongoDB; Prisma tests use the Prisma mock in
 `tests/helpers/prisma.ts`. Module names whose path is already taken (e.g. `auth`) are
 refused.
@@ -143,7 +158,7 @@ refused.
 
 ```text
 npx exp-node-server create <project-name> [--template <mongoose|prisma>]
-npx exp-node-server generate <module-name> [--force]
+npx exp-node-server generate <module-name> [--auth] [--force]
 
 Commands
   create, -c <name>      Create a new project from a template
@@ -151,6 +166,7 @@ Commands
 
 Options
   -t, --template <name>  Template to use with create (mongoose | prisma)
+  -a, --auth             Generated routes require a signed-in user (default: public)
   -f, --force            Overwrite an existing module when generating
   -h, --help             Show help
   -v, --version          Show version

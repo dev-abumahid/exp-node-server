@@ -12,7 +12,7 @@ import { mongooseTestGenerator } from "../generators/mongoose/test.js";
 import { prismaSchemaGenerator } from "../generators/prisma/schema.js";
 import { prismaServiceGenerator } from "../generators/prisma/service.js";
 import { prismaTestGenerator } from "../generators/prisma/test.js";
-import { injectRoute } from "../injectors/route.js";
+import { injectRoute, listRegisteredRoutes } from "../injectors/route.js";
 import type { InjectResult } from "../injectors/source.js";
 import { injectSwagger } from "../injectors/swagger.js";
 import { CliError } from "../lib/errors.js";
@@ -25,11 +25,13 @@ export interface GenerateModuleOptions {
     cwd?: string;
     /** Overwrite files if the module already exists. */
     force?: boolean;
+    /** Require a signed-in user on the generated routes (default: public). */
+    auth?: boolean;
 }
 
 export async function generateModule(
     name: string,
-    { cwd = process.cwd(), force = false }: GenerateModuleOptions = {},
+    { cwd = process.cwd(), force = false, auth = false }: GenerateModuleOptions = {},
 ): Promise<void> {
     const type = getProjectType(cwd);
     const moduleDir = path.join(cwd, "src/app/modules", name);
@@ -40,7 +42,7 @@ export async function generateModule(
         );
     }
 
-    assertRoutePathFree(path.join(cwd, "src/routes.ts"), name);
+    assertRoutePathFree(cwd, name);
 
     const file = (suffix: string, content: string): FileSpec => ({
         path: path.join(moduleDir, `${name}.${suffix}`),
@@ -49,7 +51,7 @@ export async function generateModule(
 
     const files: FileSpec[] = [
         file("controller.ts", controllerGenerator(name)),
-        file("route.ts", routeGenerator(name)),
+        file("route.ts", routeGenerator(name, { auth })),
         file("validation.ts", validationGenerator(name)),
         file("swagger.ts", swaggerGenerator(name)),
     ];
@@ -73,7 +75,10 @@ export async function generateModule(
     if (hasTestSetup) {
         files.push({
             path: testFile,
-            content: type === "mongoose" ? mongooseTestGenerator(name) : prismaTestGenerator(name),
+            content:
+                type === "mongoose"
+                    ? mongooseTestGenerator(name, { auth })
+                    : prismaTestGenerator(name, { auth }),
         });
     }
 
@@ -123,17 +128,34 @@ const TEST_CONFIGS = ["vitest.config.ts", "vitest.config.mts", "vitest.config.js
 export const BACKUP_ROOT = ".exp-node-server/backups";
 
 /**
- * Refuses a module whose URL is already taken by another router, e.g. `-g auth`
- * next to the template's account routes mounted at `/auth`.
+ * Refuses a module whose URL is already taken, e.g. `-g auth` next to the
+ * template's account routes mounted at `/auth`: by another router in
+ * `src/routes.ts` (any formatting), or by another module's Swagger docs.
  */
-function assertRoutePathFree(routesFile: string, name: string): void {
-    if (!fs.existsSync(routesFile)) return;
-    const content = fs.readFileSync(routesFile, "utf-8");
-    const taken = new RegExp(`path:\\s*['"]/${name}['"]\\s*,\\s*route:\\s*(\\w+)`).exec(content);
-    if (taken && taken[1] !== `${name}Route`) {
-        throw new CliError(
-            `The path '/${name}' is already used by ${taken[1]} in src/routes.ts. Pick another module name.`,
+function assertRoutePathFree(cwd: string, name: string): void {
+    const routesFile = path.join(cwd, "src/routes.ts");
+    if (fs.existsSync(routesFile)) {
+        const clash = listRegisteredRoutes(fs.readFileSync(routesFile, "utf-8")).find(
+            (r) => r.path === `/${name}` && r.route !== `${name}Route`,
         );
+        if (clash) {
+            throw new CliError(
+                `The path '/${name}' is already used by ${clash.route ?? "another router"} in src/routes.ts. Pick another module name.`,
+            );
+        }
+    }
+
+    const modulesDir = path.join(cwd, "src/app/modules");
+    if (!fs.existsSync(modulesDir)) return;
+    const documented = new RegExp(`['"\`]/api/${name}(/[^'"\`]*)?['"\`]\\s*:`);
+    for (const other of fs.readdirSync(modulesDir)) {
+        if (other === name) continue;
+        const docs = path.join(modulesDir, other, `${other}.swagger.ts`);
+        if (fs.existsSync(docs) && documented.test(fs.readFileSync(docs, "utf-8"))) {
+            throw new CliError(
+                `The path '/api/${name}' is already documented by the '${other}' module. Pick another module name.`,
+            );
+        }
     }
 }
 

@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { logger } from "./logger.js";
@@ -46,7 +47,7 @@ export function writeFiles(files: FileSpec[], cwd: string, options: WriteOptions
                 fs.mkdirSync(path.dirname(file.path), { recursive: true });
                 created.push(file.path); // before writing: a partial new file is removed too
             }
-            fs.writeFileSync(file.path, file.content);
+            writeAtomic(file.path, file.content);
             if (originals.has(file.path)) overwritten.push(file.path);
         }
     } catch (err) {
@@ -58,7 +59,7 @@ export function writeFiles(files: FileSpec[], cwd: string, options: WriteOptions
                 // nothing more we can do for this file
             }
         };
-        for (const file of overwritten) attempt(() => fs.writeFileSync(file, originals.get(file)!));
+        for (const file of overwritten) attempt(() => writeAtomic(file, originals.get(file)!));
         for (const file of created) attempt(() => fs.rmSync(file, { force: true }));
         // deepest first, and only folders we created that are empty again
         for (const dir of [...new Set(createdDirs)].sort((a, b) => b.length - a.length)) {
@@ -74,6 +75,25 @@ export function writeFiles(files: FileSpec[], cwd: string, options: WriteOptions
     for (const file of originals.keys()) logger.success(`${rel(file)} updated`);
 
     return { created, updated: [...originals.keys()], backupDir };
+}
+
+/**
+ * Writes to a temporary sibling, then renames it over the target: a crash or a
+ * full disk never leaves a half-written file. Like a plain write, it refuses
+ * read-only files, and it keeps the file's permissions.
+ */
+function writeAtomic(file: string, content: string): void {
+    const existing = fs.existsSync(file) ? fs.statSync(file) : null;
+    if (existing) fs.accessSync(file, fs.constants.W_OK);
+
+    const tmp = `${file}.${randomBytes(6).toString("hex")}.tmp`;
+    try {
+        fs.writeFileSync(tmp, content, existing ? { mode: existing.mode } : {});
+        fs.renameSync(tmp, file);
+    } catch (err) {
+        fs.rmSync(tmp, { force: true });
+        throw err;
+    }
 }
 
 /** Saves the previous content of overwritten files, mirroring their paths. */

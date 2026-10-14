@@ -13,7 +13,7 @@ ${chalk.bold(BIN)} - scaffold Express + TypeScript APIs with Mongoose or Prisma
 
 ${chalk.bold("Usage")}
   npx ${BIN} create <project-name> [--template <mongoose|prisma>]
-  npx ${BIN} generate <module-name> [--force]
+  npx ${BIN} generate <module-name> [--auth] [--force]
 
 ${chalk.bold("Commands")}
   create, -c <name>      Create a new project from a template
@@ -21,6 +21,7 @@ ${chalk.bold("Commands")}
 
 ${chalk.bold("Options")}
   -t, --template <name>  Template to use with create (${DATABASES.join(" | ")})
+  -a, --auth             Generated routes require a signed-in user (default: public)
   -f, --force            Overwrite an existing module when generating
   -h, --help             Show this help
   -v, --version          Show version
@@ -29,6 +30,7 @@ ${chalk.bold("Examples")}
   npx ${BIN} -c my-api
   npx ${BIN} create my-api --template prisma
   npx ${BIN} -g order
+  npx ${BIN} -g order --auth
 `;
 
 type Command = { kind: "create"; name: string | undefined } | { kind: "generate"; name: string | undefined };
@@ -50,6 +52,9 @@ export async function run(argv: string[]): Promise<void> {
     }
 
     if (command.kind === "create") {
+        if (values.auth || values.force) {
+            throw new CliError("--auth and --force only apply to generate.");
+        }
         const projectName = validateProjectName(command.name);
         if (!projectName) {
             throw new CliError(
@@ -77,7 +82,7 @@ export async function run(argv: string[]): Promise<void> {
         );
     }
 
-    await generateModule(moduleName, { force: values.force ?? false });
+    await generateModule(moduleName, { force: values.force ?? false, auth: values.auth ?? false });
 }
 
 function parse(argv: string[]) {
@@ -91,6 +96,7 @@ function parse(argv: string[]) {
                 generate: { type: "string", short: "g" },
                 template: { type: "string", short: "t" },
                 force: { type: "boolean", short: "f" },
+                auth: { type: "boolean", short: "a" },
                 help: { type: "boolean", short: "h" },
                 version: { type: "boolean", short: "v" },
             },

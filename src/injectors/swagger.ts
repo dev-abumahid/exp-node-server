@@ -3,6 +3,7 @@ import {
     detectImportStyle,
     type InjectResult,
     insertImport,
+    isBalanced,
     withLineEndings,
 } from "./source.js";
 
@@ -31,5 +32,12 @@ function edit(content: string, name: string): InjectResult {
         next = updated;
     }
 
-    return next === content ? { status: "unchanged" } : { status: "updated", content: next };
+    if (next === content) return { status: "unchanged" };
+
+    // never write something that looks broken (see route.ts)
+    const spreads = next.match(new RegExp(`\\.\\.\\.${docsVar}\\b`, "g"))?.length ?? 0;
+    if ((isBalanced(content) && !isBalanced(next)) || spreads !== 1) {
+        return { status: "failed", reason: "the edited file didn't look right" };
+    }
+    return { status: "updated", content: next };
 }

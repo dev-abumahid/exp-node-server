@@ -177,6 +177,9 @@ through the route, controller and service against a real in-memory MongoDB
 ([mongodb-memory-server](https://github.com/typegoose/mongodb-memory-server), downloaded
 on the first run). Only the email queue and Cloudinary are mocked.
 
+The email queue tests run the real Agenda worker on the same in-memory MongoDB
+(retries, giving up, several workers, graceful shutdown).
+
 ## 🧠 Tech Stack
 
 - Express.js — Backend framework

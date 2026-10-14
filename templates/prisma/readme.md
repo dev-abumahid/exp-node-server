@@ -173,6 +173,15 @@ Route tests with [supertest](https://github.com/ladjs/supertest) run each reques
 through the route, controller and service. Prisma, the email queue and Cloudinary
 are mocked, so no database is needed.
 
+The email queue tests need a real PostgreSQL and are skipped otherwise:
+
+```bash
+docker compose up -d
+TEST_DATABASE_URL="postgresql://postgres:change-me@localhost:5432/server_db" npm test
+```
+
+They use their own schema, which is dropped afterwards.
+
 ## 🧠 Tech Stack
 
 - Express.js — Backend framework

@@ -30,40 +30,108 @@ export function insertImport(content: string, line: string): string {
 const PAIRS: Record<string, string> = { "[": "]", "{": "}", "(": ")" };
 
 /**
+ * If a comment, string or template literal starts at `i`, the index of its last
+ * character (-1 if it never ends). Otherwise `null`: `i` is ordinary code.
+ */
+function skipNonCode(content: string, i: number): number | null {
+    const ch = content[i];
+    const next = content[i + 1];
+
+    if (ch === "/" && next === "/") {
+        const end = content.indexOf("\n", i);
+        return end === -1 ? content.length - 1 : end;
+    }
+    if (ch === "/" && next === "*") {
+        const end = content.indexOf("*/", i + 2);
+        return end === -1 ? -1 : end + 1;
+    }
+    if (ch === "'" || ch === '"') {
+        let j = i + 1;
+        while (j < content.length && content[j] !== ch && content[j] !== "\n") {
+            j += content[j] === "\\" ? 2 : 1;
+        }
+        return content[j] === ch ? j : -1;
+    }
+    if (ch === "`") {
+        // template literal: `${ ... }` holds real code, which may itself contain
+        // brackets, strings and nested templates
+        let j = i + 1;
+        while (j < content.length) {
+            if (content[j] === "\\") j += 2;
+            else if (content[j] === "`") return j;
+            else if (content[j] === "$" && content[j + 1] === "{") {
+                const end = walk(content, j + 2, ["}"], true);
+                if (end === -1) return -1;
+                j = end + 1;
+            } else j++;
+        }
+        return -1;
+    }
+    return null;
+}
+
+/**
+ * Walks code from `from` with `stack` holding the closers still expected.
+ * With `stopWhenClosed`, returns the index where the stack empties; otherwise
+ * returns `content.length` if the code ends balanced. -1 when brackets don't
+ * match or a string / comment never ends.
+ */
+function walk(content: string, from: number, stack: string[], stopWhenClosed: boolean): number {
+    for (let i = from; i < content.length; i++) {
+        const skipped = skipNonCode(content, i);
+        if (skipped !== null) {
+            if (skipped === -1) return -1;
+            i = skipped;
+            continue;
+        }
+
+        const ch = content[i]!;
+        if (ch in PAIRS) {
+            stack.push(PAIRS[ch]!);
+        } else if (ch === "]" || ch === "}" || ch === ")") {
+            if (stack.pop() !== ch) return -1; // unbalanced: don't guess
+            if (stopWhenClosed && stack.length === 0) return i;
+        }
+    }
+    return !stopWhenClosed && stack.length === 0 ? content.length : -1;
+}
+
+/**
  * Index of the bracket that closes a block whose body starts at `from`, or -1.
  * Tracks nesting and skips strings, template literals and comments, so entries
  * like `{ path: '/a', route: a, middlewares: [x] }` don't end the block early.
  */
 export function findClosingBracket(content: string, from: number, close: "]" | "}"): number {
-    const stack: string[] = [close];
+    return walk(content, from, [close], true);
+}
 
-    for (let i = from; i < content.length; i++) {
+/** Whether every bracket in `content` is closed, ignoring strings and comments. */
+export function isBalanced(content: string): boolean {
+    return walk(content, 0, [], false) === content.length;
+}
+
+/**
+ * The `{ ... }` items of the array / object body `[start, end)`, as source text.
+ * Nested brackets, strings and comments are skipped over.
+ */
+export function topLevelObjects(content: string, start: number, end: number): string[] {
+    const items: string[] = [];
+    for (let i = start; i < end; i++) {
+        const skipped = skipNonCode(content, i);
+        if (skipped !== null) {
+            if (skipped === -1) return items;
+            i = skipped;
+            continue;
+        }
         const ch = content[i]!;
-        const next = content[i + 1];
-
-        if (ch === "/" && next === "/") {
-            const end = content.indexOf("\n", i);
-            if (end === -1) return -1;
-            i = end;
-        } else if (ch === "/" && next === "*") {
-            const end = content.indexOf("*/", i + 2);
-            if (end === -1) return -1;
-            i = end + 1;
-        } else if (ch === "'" || ch === '"' || ch === "`") {
-            // skip to the matching unescaped quote (template `${}` can't hold our brackets
-            // in route / swagger registrations, so they're treated as plain text)
-            let j = i + 1;
-            while (j < content.length && content[j] !== ch) j += content[j] === "\\" ? 2 : 1;
-            if (j >= content.length) return -1;
-            i = j;
-        } else if (ch in PAIRS) {
-            stack.push(PAIRS[ch]!);
-        } else if (ch === "]" || ch === "}" || ch === ")") {
-            if (stack.pop() !== ch) return -1; // unbalanced: don't guess
-            if (stack.length === 0) return i;
+        if (ch in PAIRS) {
+            const close = walk(content, i + 1, [PAIRS[ch]!], true);
+            if (close === -1) return items;
+            if (ch === "{") items.push(content.slice(i, close + 1));
+            i = close;
         }
     }
-    return -1;
+    return items;
 }
 
 /**

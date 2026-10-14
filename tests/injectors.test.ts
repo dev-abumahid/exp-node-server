@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { injectRoute } from "../src/injectors/route.js";
-import { insertImport } from "../src/injectors/source.js";
+import { injectRoute, listRegisteredRoutes } from "../src/injectors/route.js";
+import { insertImport, isBalanced } from "../src/injectors/source.js";
 import { injectSwagger } from "../src/injectors/swagger.js";
 import { TEMPLATES_DIR } from "../src/lib/paths.js";
 
@@ -77,6 +77,33 @@ describe("injectRoute", () => {
         expect(out).toContain(`middlewares: [limiter] }, // see [docs]`);
     });
 
+    it("treats ${...} in template literals as code", () => {
+        const src = [
+            "const v = (n: number) => `/v${[n, ']'].join('')}`;",
+            "const moduleRoutes = [",
+            "  { path: `/legacy${v(1)}]`, route: legacyRoute },",
+            "];",
+            "",
+        ].join("\n");
+
+        const out = updated(injectRoute(src, "order"));
+
+        expect(out).toContain('  { path: `/legacy${v(1)}]`, route: legacyRoute },\n  { path: "/order", route: orderRoute },\n];');
+    });
+
+    it("handles template literals nested inside ${...}", () => {
+        const src = "const moduleRoutes = [\n  { path: `/x${`]`}`, route: xRoute },\n];\n";
+
+        const out = updated(injectRoute(src, "order"));
+
+        expect(out).toContain('{ path: `/x${`]`}`, route: xRoute },\n  { path: "/order", route: orderRoute },\n];');
+    });
+
+    it("refuses to edit a file with an unterminated template literal", () => {
+        const src = "const moduleRoutes = [\n  { path: `/a${x, route: aRoute },\n];\n";
+        expect(injectRoute(src, "order").status).toBe("failed");
+    });
+
     it("refuses to guess when the brackets don't balance", () => {
         expect(injectRoute(`const moduleRoutes = [\n  { path: '/a', route: a },\n`, "order").status).toBe("failed");
     });
@@ -86,7 +113,53 @@ describe("injectRoute", () => {
     });
 });
 
+describe("listRegisteredRoutes", () => {
+    it("reads entries in any property order and layout, and direct .use() mounts", () => {
+        const src = [
+            `const moduleRoutes = [`,
+            `  { route: reversedRoute, path: '/reversed' },`,
+            `  {`,
+            `    // multi-line, with a comment`,
+            `    path: "/multi",`,
+            `    route: multiRoute,`,
+            `  },`,
+            `  { path: '/factory', route: makeRouter() },`,
+            `];`,
+            `appRouter.use('/direct', directRouter);`,
+        ].join("\n");
+
+        expect(listRegisteredRoutes(src)).toEqual([
+            { path: "/reversed", route: "reversedRoute" },
+            { path: "/multi", route: "multiRoute" },
+            { path: "/factory", route: null },
+            { path: "/direct", route: "directRouter" },
+        ]);
+    });
+});
+
+describe("isBalanced", () => {
+    it.each([
+        ["brackets in strings and comments", "const a = [']', \"}\"]; // ]\n/* { */", true],
+        ["nested template literals", "const a = `x${`y${[1].map((n) => `${n}]`)}`}`;", true],
+        // a naive scanner ends the outer template at the inner backtick and trips on `}`
+        ["a backtick string inside ${...}", "const a = `${`}`}`;", true],
+        ["a missing bracket", "const a = [1, 2;", false],
+        ["a crossed bracket", "const a = [1, 2);", false],
+    ])("%s", (_case, src, expected) => {
+        expect(isBalanced(src)).toBe(expected);
+    });
+});
+
 describe("injectSwagger", () => {
+    it("handles a last entry without a trailing comma", () => {
+        const src = `import { aSwaggerDocs } from './a.swagger.js';\n\nexport const o = {\n  definition: {\n    paths: {\n      ...aSwaggerDocs\n    },\n  },\n};\n`;
+
+        const out = lf(updated(injectSwagger(src, "order")));
+
+        expect(out).toContain("      ...aSwaggerDocs,\n      ...orderSwaggerDocs,\n    },");
+        expect(injectSwagger(out, "order")).toEqual({ status: "unchanged" });
+    });
+
     it.each(["mongoose", "prisma"])("registers docs in the %s template", (template) => {
         const out = lf(updated(injectSwagger(read(template, "swaggerOptions.ts"), "order")));
         expect(out).toMatch(/import \{ orderSwaggerDocs \} from ['"]\.\/app\/modules\/order\/order\.swagger(\.js)?['"];/);

@@ -15,7 +15,7 @@ export const swaggerGenerator = (name: string): string => `export const ${name}S
         required: true,
         content: {
           'application/json': {
-            example: JSON.stringify({}), // put your request body
+            example: JSON.stringify({ name: 'Example ${name}' }),
           },
         },
       },
@@ -73,7 +73,7 @@ export const swaggerGenerator = (name: string): string => `export const ${name}S
         required: true,
         content: {
           'application/json': {
-            example: JSON.stringify({}), // put your request body
+            example: JSON.stringify({ name: 'Example ${name}' }),
           },
         },
       },

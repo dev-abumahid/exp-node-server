@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createProject } from "../src/commands/create-project.js";
 import { generateModule } from "../src/commands/generate-module.js";
 import { CliError } from "../src/lib/errors.js";
+import { run } from "../src/run.js";
 import type { Database } from "../src/lib/project-config.js";
 
 let tmp: string;
@@ -130,6 +131,49 @@ describe("generateModule", () => {
         expect(fs.existsSync(path.join(project, "prisma/schema/order.prisma"))).toBe(false);
         expect(fs.existsSync(path.join(project, "tests/routes/order.test.ts"))).toBe(false);
         expect(fs.readFileSync(path.join(project, "src/swaggerOptions.ts"), "utf-8")).not.toContain("order");
+    });
+
+    it("generates public routes by default, and protected ones with --auth", async () => {
+        await createProject("my-api", { template: "prisma", cwd: tmp });
+        const project = path.join(tmp, "my-api");
+        const read = (file: string) => fs.readFileSync(path.join(project, file), "utf-8");
+
+        await generateModule("order", { cwd: project });
+        await generateModule("invoice", { cwd: project, auth: true });
+
+        expect(read("src/app/modules/order/order.route.ts")).not.toContain("import auth");
+        expect(read("tests/routes/order.test.ts")).not.toContain("needs a signed-in user");
+        expect(read("src/app/modules/invoice/invoice.route.ts").match(/auth\(\)/g)).toHaveLength(5);
+        expect(read("tests/routes/invoice.test.ts")).toContain("needs a signed-in user");
+        // an example field everywhere, so data flows end to end
+        expect(read("src/app/modules/order/order.validation.ts")).toContain("name: z.string(");
+        expect(read("prisma/schema/order.prisma")).toContain("name      String");
+    });
+
+    it("finds a taken path whatever the formatting of routes.ts", async () => {
+        await createProject("my-api", { template: "mongoose", cwd: tmp });
+        const project = path.join(tmp, "my-api");
+        const routes = path.join(project, "src/routes.ts");
+        fs.writeFileSync(
+            routes,
+            fs.readFileSync(routes, "utf-8").replace("];", "  {\n    route: legacyRouter,\n    path: '/order',\n  },\n];"),
+        );
+
+        await expect(generateModule("order", { cwd: project })).rejects.toThrow(/already used by legacyRouter/);
+    });
+
+    it("refuses a path that another module documents", async () => {
+        await createProject("my-api", { template: "mongoose", cwd: tmp });
+        const project = path.join(tmp, "my-api");
+        const legacy = path.join(project, "src/app/modules/legacy");
+        fs.mkdirSync(legacy);
+        fs.writeFileSync(path.join(legacy, "legacy.swagger.ts"), "export const d = { '/api/order/{id}': {} };\n");
+
+        await expect(generateModule("order", { cwd: project })).rejects.toThrow(/documented by the 'legacy' module/);
+    });
+
+    it("rejects generate-only flags on create", async () => {
+        await expect(run(["create", "my-api", "--auth"])).rejects.toThrow(/only apply to generate/);
     });
 
     it("refuses a module whose path is taken by another router", async () => {

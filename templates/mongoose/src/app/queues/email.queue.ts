@@ -1,4 +1,5 @@
-import { exponential, type Job } from 'agenda';
+import { type Agenda, exponential, type Job } from 'agenda';
+import mongoose from 'mongoose';
 import { configs } from '../configs/index.js';
 import { logger } from '../lib/logger.js';
 import { otpEmailTemplate } from '../templates/otpEmailTemplate.js';
@@ -7,6 +8,8 @@ import sendMail from '../utils/mail_sender.js';
 import { getAgenda } from './agenda.js';
 
 export const EMAIL_QUEUE = 'email';
+// Agenda's default collection (see agenda.ts)
+export const JOBS_COLLECTION = 'agendaJobs';
 
 /** Every email the app sends goes through this one queue. */
 export type EmailJob =
@@ -30,8 +33,18 @@ const render = (job: EmailJob) => {
   }
 };
 
-export const defineEmailJob = () =>
-  getAgenda().define(
+export type EmailJobOptions = {
+  /** Delay before the first retry; it doubles on every further retry. */
+  retryDelayMs?: number;
+  maxRetries?: number;
+};
+
+/** Registers the email job on a worker. */
+export const defineEmailJob = (
+  agenda: Agenda,
+  { retryDelayMs = 10_000, maxRetries = 3 }: EmailJobOptions = {},
+) =>
+  agenda.define(
     EMAIL_QUEUE,
     async ({ attrs }: Job<EmailJob>) => {
       const data = attrs.data;
@@ -44,9 +57,24 @@ export const defineEmailJob = () =>
       }
     },
     {
-      backoff: exponential({ delay: 10_000, factor: 2, maxRetries: 3 }),
-      // jobs carry OTPs and reset links, so don't keep them around
-      removeOnComplete: true,
+      backoff: exponential({ delay: retryDelayMs, factor: 2, maxRetries }),
+      // Not `removeOnComplete`: Agenda emits "complete" before it forgets the job,
+      // and the extra await of the removal makes drain() miss it and hang until its
+      // timeout on every shutdown. A TTL index cleans up instead (below).
+    },
+  );
+
+/**
+ * Jobs carry OTPs and reset links, so finished email jobs (sent or given up on)
+ * are deleted by MongoDB an hour later. Only the email job: other jobs are kept.
+ */
+export const ensureEmailJobCleanup = () =>
+  mongoose.connection.db!.collection(JOBS_COLLECTION).createIndex(
+    { lastFinishedAt: 1 },
+    {
+      name: 'email_jobs_ttl',
+      expireAfterSeconds: 60 * 60,
+      partialFilterExpression: { name: EMAIL_QUEUE },
     },
   );
 

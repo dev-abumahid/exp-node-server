@@ -1,6 +1,6 @@
 import { prisma } from '../lib/prisma.js';
 import { logger } from '../lib/logger.js';
-import { boss } from './boss.js';
+import type { PgBoss } from 'pg-boss';
 
 export const MAINTENANCE_QUEUE = 'maintenance';
 
@@ -22,7 +22,7 @@ const cleanup = async () => {
   );
 };
 
-export const startMaintenance = async () => {
+export const startMaintenance = async (boss: PgBoss) => {
   await boss.createQueue(MAINTENANCE_QUEUE, { retryLimit: 1, deleteAfterSeconds: 60 * 60 });
   // pg-boss runs a schedule once across all instances, every 15 minutes
   await boss.schedule(MAINTENANCE_QUEUE, '*/15 * * * *');

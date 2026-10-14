@@ -1,11 +1,15 @@
 import { logger } from '../lib/logger.js';
-import { createAgenda, getAgenda } from './agenda.js';
-import { defineEmailJob } from './email.queue.js';
+import { type AgendaOptions, createAgenda, getAgenda } from './agenda.js';
+import { defineEmailJob, type EmailJobOptions, ensureEmailJobCleanup } from './email.queue.js';
 
-export const startQueues = async () => {
-  createAgenda();
-  defineEmailJob();
-  await getAgenda().start();
+/** The defaults are meant for production; tests pass shorter delays. */
+export type QueueOptions = AgendaOptions & EmailJobOptions;
+
+export const startQueues = async (options: QueueOptions = {}) => {
+  const agenda = createAgenda(options);
+  defineEmailJob(agenda, options);
+  await ensureEmailJobCleanup();
+  await agenda.start();
   logger.info('Queues are running...');
 };
 

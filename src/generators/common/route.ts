@@ -1,5 +1,4 @@
-// the templates' prettier `printWidth`
-const PRINT_WIDTH = 100;
+import { PRINT_WIDTH } from "./format.js";
 
 /** `router.<method>(...)`, on one line if it fits, otherwise one argument per line (like prettier). */
 const routeCall = (method: string, args: string[]): string => {

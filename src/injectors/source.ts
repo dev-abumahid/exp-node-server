@@ -27,6 +27,45 @@ export function insertImport(content: string, line: string): string {
     return `${content.slice(0, end)}\n${line}${content.slice(end)}`;
 }
 
+const PAIRS: Record<string, string> = { "[": "]", "{": "}", "(": ")" };
+
+/**
+ * Index of the bracket that closes a block whose body starts at `from`, or -1.
+ * Tracks nesting and skips strings, template literals and comments, so entries
+ * like `{ path: '/a', route: a, middlewares: [x] }` don't end the block early.
+ */
+export function findClosingBracket(content: string, from: number, close: "]" | "}"): number {
+    const stack: string[] = [close];
+
+    for (let i = from; i < content.length; i++) {
+        const ch = content[i]!;
+        const next = content[i + 1];
+
+        if (ch === "/" && next === "/") {
+            const end = content.indexOf("\n", i);
+            if (end === -1) return -1;
+            i = end;
+        } else if (ch === "/" && next === "*") {
+            const end = content.indexOf("*/", i + 2);
+            if (end === -1) return -1;
+            i = end + 1;
+        } else if (ch === "'" || ch === '"' || ch === "`") {
+            // skip to the matching unescaped quote (template `${}` can't hold our brackets
+            // in route / swagger registrations, so they're treated as plain text)
+            let j = i + 1;
+            while (j < content.length && content[j] !== ch) j += content[j] === "\\" ? 2 : 1;
+            if (j >= content.length) return -1;
+            i = j;
+        } else if (ch in PAIRS) {
+            stack.push(PAIRS[ch]!);
+        } else if (ch === "]" || ch === "}" || ch === ")") {
+            if (stack.pop() !== ch) return -1; // unbalanced: don't guess
+            if (stack.length === 0) return i;
+        }
+    }
+    return -1;
+}
+
 /**
  * Appends `entry` as the last item of the bracketed/braced block that starts
  * at `opener`, matching the indentation of the existing items.
@@ -42,7 +81,7 @@ export function appendToBlock(
     if (start?.index === undefined) return null;
 
     const bodyStart = start.index + start[0].length;
-    const bodyEnd = content.indexOf(close, bodyStart);
+    const bodyEnd = findClosingBracket(content, bodyStart, close);
     if (bodyEnd === -1) return null;
 
     const body = content.slice(bodyStart, bodyEnd);

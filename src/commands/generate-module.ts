@@ -77,17 +77,34 @@ export async function generateModule(
         });
     }
 
-    writeFiles(files, cwd);
+    // registrations are planned first and written together with the module files,
+    // so a failure leaves the project exactly as it was
+    const registrations = [
+        planInjection(path.join(cwd, "src/routes.ts"), (c) => injectRoute(c, name), "Route registered"),
+        planInjection(
+            path.join(cwd, "src/swaggerOptions.ts"),
+            (c) => injectSwagger(c, name),
+            "Swagger docs registered",
+        ),
+    ];
+    for (const { file } of registrations) if (file) files.push(file);
+
+    // --force never silently destroys code: changed files are copied aside first
+    const backupDir = force
+        ? path.join(cwd, BACKUP_ROOT, new Date().toISOString().replace(/[:.]/g, "-"))
+        : undefined;
+
+    const result = writeFiles(files, cwd, { backupDir });
+
+    for (const { report } of registrations) report();
     if (!hasTestSetup) {
         logger.info(chalk.dim("  no vitest config found, skipped tests/routes test"));
     }
-
-    applyInjection(path.join(cwd, "src/routes.ts"), (c) => injectRoute(c, name), "Route registered");
-    applyInjection(
-        path.join(cwd, "src/swaggerOptions.ts"),
-        (c) => injectSwagger(c, name),
-        "Swagger docs registered",
-    );
+    if (result.backupDir) {
+        logger.warn(
+            `${result.updated.length} existing file(s) were overwritten. Previous versions: ${path.relative(cwd, result.backupDir)}`,
+        );
+    }
 
     if (type === "prisma") {
         logger.info(chalk.blue("\nNext, run:"));
@@ -101,6 +118,9 @@ export async function generateModule(
 }
 
 const TEST_CONFIGS = ["vitest.config.ts", "vitest.config.mts", "vitest.config.js"];
+
+/** Where `--force` keeps the previous versions of overwritten files. */
+export const BACKUP_ROOT = ".exp-node-server/backups";
 
 /**
  * Refuses a module whose URL is already taken by another router, e.g. `-g auth`
@@ -117,30 +137,39 @@ function assertRoutePathFree(routesFile: string, name: string): void {
     }
 }
 
-function applyInjection(
+interface PlannedInjection {
+    /** The updated file to write, if it changes. */
+    file: FileSpec | null;
+    /** Prints the outcome, once everything was written. */
+    report: () => void;
+}
+
+/** Works out the edit to a registration file without touching the disk. */
+function planInjection(
     filePath: string,
     inject: (content: string) => InjectResult,
     successMessage: string,
-): void {
+): PlannedInjection {
     const fileName = path.basename(filePath);
 
     if (!fs.existsSync(filePath)) {
-        logger.warn(`${fileName} not found, skipping registration`);
-        return;
+        return { file: null, report: () => logger.warn(`${fileName} not found, skipping registration`) };
     }
 
     const result = inject(fs.readFileSync(filePath, "utf-8"));
 
     switch (result.status) {
         case "updated":
-            fs.writeFileSync(filePath, result.content);
-            logger.success(`${successMessage} in ${fileName}`);
-            break;
+            return {
+                file: { path: filePath, content: result.content },
+                report: () => logger.success(`${successMessage} in ${fileName}`),
+            };
         case "unchanged":
-            logger.info(chalk.dim(`  already registered in ${fileName}`));
-            break;
+            return { file: null, report: () => logger.info(chalk.dim(`  already registered in ${fileName}`)) };
         case "failed":
-            logger.warn(`Couldn't update ${fileName} (${result.reason}). Register it manually.`);
-            break;
+            return {
+                file: null,
+                report: () => logger.warn(`Couldn't update ${fileName} (${result.reason}). Register it manually.`),
+            };
     }
 }

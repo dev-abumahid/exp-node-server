@@ -33,3 +33,6 @@ coverage/
 
 # Docker 
 *.pid
+
+# backups made by `exp-node-server -g <name> --force`
+.exp-node-server/

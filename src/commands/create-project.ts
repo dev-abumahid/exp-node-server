@@ -95,4 +95,17 @@ async function setPackageName(dir: string, name: string): Promise<void> {
     const pkg = JSON.parse(await fs.promises.readFile(pkgPath, "utf-8")) as Record<string, unknown>;
     pkg.name = name;
     await fs.promises.writeFile(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+
+    // the lockfile repeats the name (top level and the root package entry)
+    const lockPath = path.join(dir, "package-lock.json");
+    if (!fs.existsSync(lockPath)) return;
+
+    const lock = JSON.parse(await fs.promises.readFile(lockPath, "utf-8")) as {
+        name?: string;
+        packages?: Record<string, { name?: string }>;
+    };
+    lock.name = name;
+    const root = lock.packages?.[""];
+    if (root) root.name = name;
+    await fs.promises.writeFile(lockPath, `${JSON.stringify(lock, null, 2)}\n`);
 }

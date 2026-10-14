@@ -25,6 +25,26 @@ This tool helps developers quickly scaffold `clean`, `modular` `Express` APIs wi
 - 🔄 Add modules anytime
 - 📦 Zero boilerplate setup
 
+## 📋 Requirements
+
+- Node.js **20.17+** to run the CLI; generated projects need Node.js **22.12+**
+- Docker (or your own database): PostgreSQL for Prisma, MongoDB for Mongoose
+
+## 📥 Installation
+
+No install needed: `npx` always runs the latest version (recommended).
+
+```bash
+npx exp-node-server --help
+```
+
+Or install it globally to use `exp-node-server` directly:
+
+```bash
+npm install -g exp-node-server
+exp-node-server --version
+```
+
 ## 📦 Quick Start
 
 Run directly using npx (recommended):
@@ -44,7 +64,38 @@ Then:
 ```bash
 cd my-api
 npm install
-npm run dev
+cp .env.example .env     # fill in the secrets (openssl rand -hex 32)
+docker compose up -d     # starts PostgreSQL / MongoDB
+npm run db:migrate       # Prisma only
+npm run dev              # http://localhost:5000, docs at /docs
+npm test
+```
+
+### What you get
+
+```text
+my-api/
+├── src/
+│   ├── app.ts                 # express app: helmet, cors, rate limit, routes
+│   ├── server.ts              # connects the database, starts queues, graceful shutdown
+│   ├── routes.ts              # module routers (generated modules are added here)
+│   ├── swaggerOptions.ts      # API docs (generated modules are added here)
+│   └── app/
+│       ├── configs/           # env vars, validated with zod on startup
+│       ├── middlewares/       # auth, validation, rate limiting, uploads, errors
+│       ├── modules/
+│       │   ├── account/       # sign up/in, OTP, refresh tokens, password reset
+│       │   └── profile/       # profile + photo upload (Cloudinary)
+│       ├── passport-js/       # social login (Google, Facebook, GitHub, X, LinkedIn, Discord)
+│       ├── queues/            # background email jobs (pg-boss / Agenda, no Redis)
+│       ├── templates/         # email templates
+│       └── utils/
+├── tests/
+│   ├── routes/                # supertest suites, one per module
+│   └── helpers/
+├── prisma/schema/             # Prisma only: one .prisma file per model
+├── docker-compose.yml
+└── .env.example
 ```
 
 ## 🧩 Generate a Module
@@ -107,6 +158,19 @@ Options
 
 - Project names are lowercased and spaces become dashes (`My API` → `my-api`).
 - Module names are lowercased and spaces/dashes become underscores (`order-item` → `order_item`).
+
+### Safety
+
+- **All or nothing:** a module is generated in one step. If anything fails (e.g. a
+  file can't be written), the project is left exactly as it was.
+- **`--force` keeps backups:** files it overwrites are copied first to
+  `.exp-node-server/backups/<timestamp>/` (ignored by git, ESLint and Prettier).
+  Files that wouldn't change are left alone.
+- **No clashes:** a module name whose URL is already used by another router (e.g.
+  `auth`) is refused.
+- **Validated input only:** generated services receive `req.body` after
+  `RequestValidator` parsed it with the module's zod schema, so unknown fields are
+  dropped. Payload types come from that schema (`z.infer`).
 
 ## 📁 Generated Module Structure
 

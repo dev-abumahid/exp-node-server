@@ -60,6 +60,27 @@ describe("injectRoute", () => {
         expect(injectRoute(once, "order")).toEqual({ status: "unchanged" });
     });
 
+    it("appends after entries that contain nested arrays, strings and comments", () => {
+        const src = [
+            `const moduleRoutes = [`,
+            `  { path: '/a', route: aRoute, middlewares: [limiter] }, // see [docs]`,
+            `  /* { path: '/old', route: oldRoute }, ] */`,
+            `  { path: '/b]', route: bRoute },`,
+            `];`,
+            ``,
+        ].join("\n");
+
+        const out = updated(injectRoute(src, "order"));
+
+        // (no imports to copy the style from, so the injector uses double quotes)
+        expect(out).toContain(`  { path: '/b]', route: bRoute },\n  { path: "/order", route: orderRoute },\n];`);
+        expect(out).toContain(`middlewares: [limiter] }, // see [docs]`);
+    });
+
+    it("refuses to guess when the brackets don't balance", () => {
+        expect(injectRoute(`const moduleRoutes = [\n  { path: '/a', route: a },\n`, "order").status).toBe("failed");
+    });
+
     it("reports failure when moduleRoutes is missing", () => {
         expect(injectRoute(`import x from "y";\n`, "order").status).toBe("failed");
     });

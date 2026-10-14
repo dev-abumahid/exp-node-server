@@ -1,5 +1,4 @@
-// the templates' prettier `printWidth`
-const PRINT_WIDTH = 100;
+import { PRINT_WIDTH } from "./format.js";
 
 /** `const result = await <service call>`, wrapped after `=` when too long (like prettier). */
 const callService = (name: string, fn: string): string => {

@@ -1,3 +1,4 @@
 node_modules
 dist
 prisma/generated
+.exp-node-server

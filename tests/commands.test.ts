@@ -60,6 +60,14 @@ describe.each<Database>(["mongoose", "prisma"])("%s", (template) => {
 });
 
 describe("createProject", () => {
+    it("names the project in package.json and the lockfile", async () => {
+        await createProject("my-api", { template: "prisma", cwd: tmp });
+        const lock = JSON.parse(fs.readFileSync(path.join(tmp, "my-api/package-lock.json"), "utf-8"));
+
+        expect(lock.name).toBe("my-api");
+        expect(lock.packages[""].name).toBe("my-api");
+    });
+
     it("refuses to overwrite an existing folder", async () => {
         fs.mkdirSync(path.join(tmp, "my-api"));
         await expect(createProject("my-api", { template: "mongoose", cwd: tmp })).rejects.toThrow(CliError);
@@ -87,6 +95,41 @@ describe("generateModule", () => {
         // forcing doesn't register the route twice
         const routes = fs.readFileSync(path.join(project, "src/routes.ts"), "utf-8");
         expect(routes.match(/route: orderRoute/g)).toHaveLength(1);
+    });
+
+    it("keeps a backup of files that --force overwrites", async () => {
+        await createProject("my-api", { template: "mongoose", cwd: tmp });
+        const project = path.join(tmp, "my-api");
+        await generateModule("order", { cwd: project });
+        const service = path.join(project, "src/app/modules/order/order.service.ts");
+        fs.writeFileSync(service, "// my custom logic\n");
+
+        await generateModule("order", { cwd: project, force: true });
+
+        expect(fs.readFileSync(service, "utf-8")).toContain("order_service");
+        const backups = path.join(project, ".exp-node-server/backups");
+        const [run] = fs.readdirSync(backups);
+        const saved = path.join(backups, run!, "src/app/modules/order/order.service.ts");
+        expect(fs.readFileSync(saved, "utf-8")).toBe("// my custom logic\n");
+        // unchanged files aren't backed up
+        expect(fs.existsSync(path.join(backups, run!, "src/app/modules/order/order.route.ts"))).toBe(false);
+    });
+
+    it.skipIf(process.getuid?.() === 0)("leaves the project untouched when a write fails", async () => {
+        await createProject("my-api", { template: "prisma", cwd: tmp });
+        const project = path.join(tmp, "my-api");
+        const routes = path.join(project, "src/routes.ts");
+        const before = fs.readFileSync(routes, "utf-8");
+        fs.chmodSync(routes, 0o444); // written after the module files
+
+        await expect(generateModule("order", { cwd: project })).rejects.toThrow();
+
+        fs.chmodSync(routes, 0o644);
+        expect(fs.readFileSync(routes, "utf-8")).toBe(before);
+        expect(fs.existsSync(path.join(project, "src/app/modules/order"))).toBe(false);
+        expect(fs.existsSync(path.join(project, "prisma/schema/order.prisma"))).toBe(false);
+        expect(fs.existsSync(path.join(project, "tests/routes/order.test.ts"))).toBe(false);
+        expect(fs.readFileSync(path.join(project, "src/swaggerOptions.ts"), "utf-8")).not.toContain("order");
     });
 
     it("refuses a module whose path is taken by another router", async () => {

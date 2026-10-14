@@ -1,6 +1,6 @@
 {
   "name": "exp-node-server",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "CLI to scaffold Express + TypeScript APIs with Mongoose or Prisma, Zod validation and Swagger docs",
   "type": "module",
   "bin": {

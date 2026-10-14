@@ -4,3 +4,4 @@ coverage/
 *.log
 *.tgz
 .DS_Store
+config.bat

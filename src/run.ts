@@ -6,6 +6,7 @@ import { generateModule } from "./commands/generate-module.js";
 import { CliError } from "./lib/errors.js";
 import { DATABASES, isDatabase } from "./lib/project-config.js";
 import { validateModuleName, validateProjectName } from "./lib/validators.js";
+import { syncContext } from "./utils/context-sync.js";
 
 const BIN = "exp-node-server";
 
@@ -16,17 +17,20 @@ ${chalk.bold("Usage")}
   npx ${BIN} create <project-name> [--template <mongoose|prisma>]
   npx ${BIN} generate <module-name> [--auth] [--force]
   npx ${BIN} ai init [--database <mongoose|prisma>] [--force]
+  npx ${BIN} ai sync [--apply]
 
 ${chalk.bold("Commands")}
   create, -c <name>      Create a new project from a template
   generate, -g <name>    Generate a module in the current project
-  ai init                Add the ExpFlow AI workflow to the current project
+  ai init                Add the ExpFlow AI workflow and project context
+  ai sync                Check project context against the source code
 
 ${chalk.bold("Options")}
   -t, --template <name>  Template to use with create (${DATABASES.join(" | ")})
   -a, --auth             Generated routes require a signed-in user (default: public)
   -f, --force            Overwrite an existing module, or refresh managed ExpFlow files
       --database <name>  Database for ai init (default: from .projectrc.json)
+      --apply            Apply the context changes proposed by ai sync
   -h, --help             Show this help
   -v, --version          Show version
 
@@ -68,29 +72,42 @@ export async function run(argv: string[], { cwd = process.cwd() }: RunOptions = 
         if (values.auth) throw new CliError("--auth only applies to generate.");
         if (values.template !== undefined) throw new CliError("--template only applies to create.");
 
-        if (command.action !== "init") {
-            throw new CliError(
-                command.action
-                    ? `Unknown ai command '${command.action}'. Try: ${BIN} ai init`
-                    : `ai requires a subcommand. Try: ${BIN} ai init`,
-            );
+        if (command.action === "init") {
+            if (values.apply) throw new CliError("--apply only applies to ai sync.");
+
+            const { database } = values;
+            if (database !== undefined && !isDatabase(database)) {
+                throw new CliError(`Unknown database '${database}'. Use one of: ${DATABASES.join(", ")}.`);
+            }
+
+            await initAIWorkflow({
+                cwd,
+                force: values.force ?? false,
+                ...(database !== undefined ? { database } : {}),
+            });
+            return;
         }
 
-        const { database } = values;
-        if (database !== undefined && !isDatabase(database)) {
-            throw new CliError(`Unknown database '${database}'. Use one of: ${DATABASES.join(", ")}.`);
+        if (command.action === "sync") {
+            if (values.force) throw new CliError("--force only applies to ai init or generate.");
+            if (values.database !== undefined) throw new CliError("--database only applies to ai init.");
+
+            syncContext({ cwd, apply: values.apply ?? false });
+            return;
         }
 
-        await initAIWorkflow({
-            cwd,
-            force: values.force ?? false,
-            ...(database !== undefined ? { database } : {}),
-        });
-        return;
+        throw new CliError(
+            command.action
+                ? `Unknown ai command '${command.action}'. Try: ${BIN} ai init or ${BIN} ai sync`
+                : `ai requires a subcommand. Try: ${BIN} ai init or ${BIN} ai sync`,
+        );
     }
 
     if (values.database !== undefined) {
         throw new CliError("--database only applies to ai init.");
+    }
+    if (values.apply) {
+        throw new CliError("--apply only applies to ai sync.");
     }
 
     if (command.kind === "create") {
@@ -138,6 +155,7 @@ function parse(argv: string[]) {
                 generate: { type: "string", short: "g" },
                 template: { type: "string", short: "t" },
                 database: { type: "string" },
+                apply: { type: "boolean" },
                 force: { type: "boolean", short: "f" },
                 auth: { type: "boolean", short: "a" },
                 help: { type: "boolean", short: "h" },

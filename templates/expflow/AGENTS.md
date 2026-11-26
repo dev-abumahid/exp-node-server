@@ -10,6 +10,15 @@ Follow `.expflow/config.json` and `.expflow/rules/backend.md`.
 - Use `/apply` only for an approved proposal.
 - Run `/verify` before marking work complete.
 - Use `/archive` only after successful verification.
+- Use `/sync` after modules, routes or schemas change.
+
+## Context
+
+- Start from `.expflow/context/modules.md`.
+- Load only the context documents relevant to the current task.
+- Never load every context document.
+- Source code and schemas are the truth; context is documentation.
+- Reuse documented modules and integration patterns instead of duplicating them.
 
 ## Engineering
 

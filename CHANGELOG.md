@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.3.0
+
+### Added
+
+- ExpFlow project context: `ai init` now creates `.expflow/context/` with
+  `project.md`, `architecture.md`, `modules.md`, per-module docs for auth,
+  profile, queue, email, storage, rate limiting and API docs, plus a database
+  schema overview. Context is rendered for the detected Mongoose or Prisma project.
+- `exp-node-server ai sync`: scans modules, routes and database models, writes
+  `.expflow/context/sync-report.md`, and reports missing, stale or orphan context.
+- `ai sync --apply`: updates the managed module registry and model tables and
+  creates stubs for modules without context. User-written context is never
+  overwritten.
+- `/sync` workflow with OpenCode and Antigravity adapters.
+- `propose`, `apply` and `verify` now load context selectively, enforce a reuse
+  policy, and report context drift.
+
+### Changed
+
+- Context uses a small index (`modules.md`) instead of loading everything, keeping
+  token usage low while avoiding duplicated infrastructure.
+
 ## 2.2.0
 
 ### Added

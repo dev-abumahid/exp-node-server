@@ -9,7 +9,7 @@ import {
 
 const read = (file: string) => fs.readFileSync(path.join(EXPFLOW_TEMPLATE_DIR, file), "utf-8");
 
-const workflows = ["propose", "apply", "verify", "archive"] as const;
+const workflows = ["propose", "apply", "verify", "archive", "sync"] as const;
 
 describe("ExpFlow template", () => {
     it.each(workflows)("ships the %s workflow", (name) => {
@@ -48,6 +48,7 @@ describe("ExpFlow template", () => {
             apply: true,
             verify: true,
             archive: true,
+            sync: true,
         });
     });
 
@@ -60,8 +61,10 @@ describe("ExpFlow template", () => {
         expect(rules).toContain("## Testing");
         expect(agents).toContain(".expflow/config.json");
         expect(agents).toContain(".expflow/rules/backend.md");
+        expect(agents).toContain(".expflow/context/modules.md");
         expect(agents).toContain("/propose");
         expect(agents).toContain("/verify");
+        expect(agents).toContain("/sync");
         expect(agents).toContain("<!-- expflow:start -->");
         expect(agents).toContain("<!-- expflow:end -->");
     });
@@ -70,6 +73,43 @@ describe("ExpFlow template", () => {
         expect(read(".expflow/workflows/propose.md")).toContain("Never modify source code");
         expect(read(".expflow/workflows/verify.md")).toContain("Do not modify source code");
         expect(read(".expflow/workflows/archive.md")).toContain("Do not modify source code");
+        expect(read(".expflow/workflows/sync.md")).toContain("Do not modify source code");
+    });
+
+    it("ships the project context index and capability docs", () => {
+        const modules = read(".expflow/context/modules.md");
+
+        expect(modules).toContain("<!-- expflow:modules:start -->");
+        expect(modules).toContain("<!-- expflow:modules:end -->");
+        expect(modules).toContain("modules/auth.md");
+        expect(modules).toContain("modules/queue.md");
+        expect(modules).toContain("Never load all module contexts");
+
+        for (const file of [
+            ".expflow/context/project.md",
+            ".expflow/context/architecture.md",
+            ".expflow/context/database/schema-overview.md",
+            ".expflow/context/modules/auth.md",
+            ".expflow/context/modules/profile.md",
+            ".expflow/context/modules/queue.md",
+            ".expflow/context/modules/email.md",
+            ".expflow/context/modules/storage.md",
+            ".expflow/context/modules/rate-limit.md",
+            ".expflow/context/modules/api-docs.md",
+        ]) {
+            expect(read(file).trim().length, file).toBeGreaterThan(50);
+        }
+
+        expect(read(".expflow/context/modules/queue.md")).toContain("{{queueBackend}}");
+        expect(read(".expflow/context/database/schema-overview.md")).toContain("<!-- expflow:models:start -->");
+    });
+
+    it("adds context discovery to propose and reuse policy to apply", () => {
+        expect(read(".expflow/workflows/propose.md")).toContain("## Context Discovery");
+        expect(read(".expflow/workflows/propose.md")).toContain("Never load every context document");
+        expect(read(".expflow/workflows/apply.md")).toContain("## Reuse Policy");
+        expect(read(".expflow/workflows/verify.md")).toContain("Context drift");
+        expect(read(".expflow/rules/backend.md")).toContain("## Context");
     });
 
     it("requires verification before archiving", () => {

@@ -71,7 +71,13 @@ describe("cli (bundled)", () => {
             expect(config.project.name).toBe("ai-demo");
             expect(config.database.provider).toBe("mongoose");
             expect(fs.existsSync(path.join(project, ".opencode/commands/propose.md"))).toBe(true);
+            expect(fs.existsSync(path.join(project, ".opencode/commands/sync.md"))).toBe(true);
             expect(fs.existsSync(path.join(project, ".agents/skills/verify/SKILL.md"))).toBe(true);
+            expect(fs.existsSync(path.join(project, ".expflow/context/modules.md"))).toBe(true);
+
+            const synced = runCli(["ai", "sync"], project);
+            expect(synced.status).toBe(0);
+            expect(fs.existsSync(path.join(project, ".expflow/context/sync-report.md"))).toBe(true);
         } finally {
             fs.rmSync(tmp, { recursive: true, force: true });
         }

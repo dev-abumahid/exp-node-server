@@ -8,12 +8,23 @@ The calling command or skill passes the feature request.
 
 ## Steps
 
-1. Read `.expflow/config.json` and `.expflow/rules/backend.md`.
-2. Understand the requested feature and its boundaries.
-3. Inspect only the existing files that are relevant to the request.
-4. Identify the existing architecture, conventions and reusable utilities.
-5. Identify affected modules, database changes, API changes and security concerns.
-6. Do not implement anything and do not create or edit source files.
+1. Read `.expflow/config.json`.
+2. Read `.expflow/context/modules.md`.
+3. Identify which modules and capabilities the request affects.
+4. Load only the relevant context documents (for example `modules/auth.md` or `modules/queue.md`).
+5. Understand the requested feature and its boundaries.
+6. Inspect only the existing files that are relevant to the request.
+7. Identify the existing architecture, conventions and reusable utilities.
+8. Identify affected modules, database changes, API changes and security concerns.
+9. Do not implement anything and do not create or edit source files.
+
+## Context Discovery
+
+- Never load every context document.
+- Use `modules.md` as the index, then open only the relevant files.
+- Reuse documented services, utilities and integration patterns.
+- Never recreate an existing capability.
+- If the context is missing or stale, note it and suggest `/sync`.
 
 ## Change ID
 

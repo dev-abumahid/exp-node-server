@@ -29,6 +29,15 @@ Implement an approved proposal. Running `/apply <change-id>` is the user's expli
 - If the scope must change, update `proposal.md`, request approval, and stop.
 - Never update `verification.md`; verification is a separate workflow.
 
+## Reuse Policy
+
+- Read the relevant `.expflow/context/` documents before implementing.
+- Reuse existing services, utilities, queues and storage helpers.
+- Follow the documented integration patterns and entry points.
+- Never duplicate an existing module or infrastructure.
+- If context documentation conflicts with the source, inspect the source and report the discrepancy.
+- If the implementation changes module capabilities, routes or schemas, note that `/sync` is required.
+
 ## Finish
 
 - Set the proposal frontmatter to `status: implemented` and `updated: <YYYY-MM-DD>`.

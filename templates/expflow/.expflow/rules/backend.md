@@ -50,3 +50,12 @@
 - Follow existing naming conventions.
 - Do not introduce dependencies without justification.
 - Do not refactor unrelated modules.
+
+## Context
+
+- Read `.expflow/context/modules.md` before inspecting source.
+- Load only context documents relevant to the current task.
+- Treat context as documentation and source code as the actual truth.
+- Reuse existing modules and infrastructure; never duplicate a documented capability.
+- If context and source conflict, inspect the source and report the discrepancy.
+- Keep context current with `npx exp-node-server ai sync`.

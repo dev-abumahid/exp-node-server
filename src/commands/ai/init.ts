@@ -16,6 +16,7 @@ import {
     mergeAgentsContent,
     readExpFlowTemplate,
     readProjectName,
+    renderTemplateContent,
 } from "../../utils/ai-template.js";
 
 export interface AIInitOptions {
@@ -69,7 +70,7 @@ export async function initAIWorkflow({
         const content =
             relative === path.normalize(EXPFLOW_CONFIG_FILE)
                 ? buildExpFlowConfig({ projectName, database })
-                : templateFile.content;
+                : renderTemplateContent(relative, templateFile.content, { projectName, database });
 
         if (relative === AGENTS_FILE) {
             const merged = mergeAgentsContent(
@@ -86,7 +87,7 @@ export async function initAIWorkflow({
             continue;
         }
 
-        // change artifacts belong to the user: only missing files are created
+        // change artifacts and project context belong to the user: only missing files are created
         if (isUserOwned(relative) && exists) continue;
 
         if (exists && !force && fs.readFileSync(target, "utf-8") !== content) {
@@ -125,11 +126,13 @@ export async function initAIWorkflow({
     };
 }
 
-/** `.expflow/changes` and `.expflow/archive` are owned by the user. */
+/** `.expflow/changes`, `.expflow/archive` and `.expflow/context` are owned by the user. */
 function isUserOwned(relative: string): boolean {
-    return [path.join(".expflow", "changes"), path.join(".expflow", "archive")].some(
-        (dir) => relative === dir || relative.startsWith(`${dir}${path.sep}`),
-    );
+    return [
+        path.join(".expflow", "changes"),
+        path.join(".expflow", "archive"),
+        path.join(".expflow", "context"),
+    ].some((dir) => relative === dir || relative.startsWith(`${dir}${path.sep}`));
 }
 
 /**

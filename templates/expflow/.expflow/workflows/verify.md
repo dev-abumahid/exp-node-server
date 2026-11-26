@@ -24,6 +24,7 @@ Typical checks, only when configured in the project:
 - Authentication and authorization on changed endpoints
 - Error handling and validation on changed endpoints
 - Regression risk in touched modules
+- Context drift: if modules, routes or schemas changed, the change needs `/sync`
 
 Do not invent commands that are not defined by the project.
 

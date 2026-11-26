@@ -39,15 +39,29 @@ describe("initAIWorkflow", () => {
             ".expflow/workflows/apply.md",
             ".expflow/workflows/verify.md",
             ".expflow/workflows/archive.md",
+            ".expflow/workflows/sync.md",
+            ".expflow/context/project.md",
+            ".expflow/context/architecture.md",
+            ".expflow/context/modules.md",
+            ".expflow/context/modules/auth.md",
+            ".expflow/context/modules/profile.md",
+            ".expflow/context/modules/queue.md",
+            ".expflow/context/modules/email.md",
+            ".expflow/context/modules/storage.md",
+            ".expflow/context/modules/rate-limit.md",
+            ".expflow/context/modules/api-docs.md",
+            ".expflow/context/database/schema-overview.md",
             ".expflow/changes/.gitkeep",
             ".opencode/commands/propose.md",
             ".opencode/commands/apply.md",
             ".opencode/commands/verify.md",
             ".opencode/commands/archive.md",
+            ".opencode/commands/sync.md",
             ".agents/skills/propose/SKILL.md",
             ".agents/skills/apply/SKILL.md",
             ".agents/skills/verify/SKILL.md",
             ".agents/skills/archive/SKILL.md",
+            ".agents/skills/sync/SKILL.md",
             "AGENTS.md",
         ];
 
@@ -66,6 +80,30 @@ describe("initAIWorkflow", () => {
         expect(config.database.provider).toBe("mongoose");
         expect(config.validation.tool).toBe("zod");
         expect(config.workflow.requireApprovalBeforeApply).toBe(true);
+        expect(config.commands.sync).toBe(true);
+    });
+
+    it("renders the context for the detected database", async () => {
+        scaffold("prisma", "my-api");
+
+        await initAIWorkflow({ cwd: tmp });
+
+        expect(read(".expflow/context/project.md")).toContain("prisma (PostgreSQL)");
+        expect(read(".expflow/context/modules/queue.md")).toContain("pg-boss (PostgreSQL)");
+        expect(read(".expflow/context/modules/queue.md")).not.toContain("{{queueBackend}}");
+        expect(read(".expflow/context/database/schema-overview.md")).toContain("| Account | prisma/schema/account.schema.prisma |");
+        expect(read(".expflow/context/database/schema-overview.md")).toContain("| RateLimit |");
+    });
+
+    it("renders the Mongoose context", async () => {
+        scaffold("mongoose", "my-api");
+
+        await initAIWorkflow({ cwd: tmp });
+
+        expect(read(".expflow/context/project.md")).toContain("mongoose (MongoDB)");
+        expect(read(".expflow/context/modules/queue.md")).toContain("Agenda (MongoDB)");
+        expect(read(".expflow/context/database/schema-overview.md")).toContain("| Collection | Source |");
+        expect(read(".expflow/context/database/schema-overview.md")).toContain("| account |");
     });
 
     it("is idempotent", async () => {
@@ -189,6 +227,18 @@ describe("initAIWorkflow", () => {
         await initAIWorkflow({ cwd: tmp, force: true });
 
         expect(fs.readFileSync(proposal, "utf-8")).toBe("# my proposal\n");
+    });
+
+    it("never overwrites project context, even with --force", async () => {
+        scaffold();
+        await initAIWorkflow({ cwd: tmp });
+
+        const context = path.join(tmp, ".expflow/context/modules/auth.md");
+        fs.writeFileSync(context, "# Auth\n\nMy verified notes.\n");
+
+        await initAIWorkflow({ cwd: tmp, force: true });
+
+        expect(fs.readFileSync(context, "utf-8")).toBe("# Auth\n\nMy verified notes.\n");
     });
 
     it("uses the folder name when package.json has no name", async () => {

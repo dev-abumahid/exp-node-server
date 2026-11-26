@@ -7,9 +7,15 @@ import { TEMPLATES_DIR } from "../lib/paths.js";
 export const EXPFLOW_TEMPLATE_DIR = path.join(TEMPLATES_DIR, "expflow");
 
 export const EXPFLOW_CONFIG_FILE = ".expflow/config.json";
+export const CONTEXT_DIR = ".expflow/context";
+export const SCHEMA_OVERVIEW_FILE = ".expflow/context/database/schema-overview.md";
 export const AGENTS_FILE = "AGENTS.md";
 export const EXPFLOW_MARKER_START = "<!-- expflow:start -->";
 export const EXPFLOW_MARKER_END = "<!-- expflow:end -->";
+export const MODULES_MARKER_START = "<!-- expflow:modules:start -->";
+export const MODULES_MARKER_END = "<!-- expflow:modules:end -->";
+export const MODELS_MARKER_START = "<!-- expflow:models:start -->";
+export const MODELS_MARKER_END = "<!-- expflow:models:end -->";
 
 export interface TemplateFile {
     /** Path relative to the template root, using the host separator. */
@@ -74,10 +80,75 @@ export function buildExpFlowConfig({ projectName, database }: ExpFlowConfigInput
             apply: true,
             verify: true,
             archive: true,
+            sync: true,
         },
     };
 
     return `${JSON.stringify(config, null, 2)}\n`;
+}
+
+const DATABASE_LABELS: Record<Database, string> = {
+    mongoose: "mongoose (MongoDB)",
+    prisma: "prisma (PostgreSQL)",
+};
+
+const CORE_MODELS: Record<Database, Array<[name: string, source: string]>> = {
+    prisma: [
+        ["Account", "prisma/schema/account.schema.prisma"],
+        ["Profile", "prisma/schema/profile.schema.prisma"],
+        ["RefreshToken", "prisma/schema/account.schema.prisma"],
+        ["SocialAccount", "prisma/schema/account.schema.prisma"],
+        ["SocialLoginCode", "prisma/schema/account.schema.prisma"],
+        ["RateLimit", "prisma/schema/account.schema.prisma"],
+    ],
+    mongoose: [
+        ["account", "src/app/modules/account/account.schema.ts"],
+        ["profile", "src/app/modules/profile/profile.schema.ts"],
+        ["refresh_token", "src/app/modules/account/account.schema.ts"],
+        ["social_account", "src/app/modules/account/account.schema.ts"],
+        ["social_login_code", "src/app/modules/account/account.schema.ts"],
+        ["rate_limit", "src/app/middlewares/rate_limiter.ts"],
+    ],
+};
+
+/** Fills the tokens used by context documents for a specific project. */
+export function renderTemplateContent(
+    relative: string,
+    content: string,
+    { projectName, database }: ExpFlowConfigInput,
+): string {
+    let rendered = content
+        .replaceAll("{{projectName}}", projectName)
+        .replaceAll("{{database}}", database)
+        .replaceAll("{{databaseLabel}}", DATABASE_LABELS[database])
+        .replaceAll("{{databaseStore}}", database === "prisma" ? "PostgreSQL" : "MongoDB")
+        .replaceAll(
+            "{{queueBackend}}",
+            database === "prisma" ? "pg-boss (PostgreSQL)" : "Agenda (MongoDB)",
+        );
+
+    if (path.normalize(relative) === path.normalize(SCHEMA_OVERVIEW_FILE)) {
+        rendered = fillCoreModels(rendered, database);
+    }
+    return rendered;
+}
+
+function fillCoreModels(content: string, database: Database): string {
+    const start = content.indexOf(MODELS_MARKER_START);
+    const end = content.indexOf(MODELS_MARKER_END);
+    if (start === -1 || end === -1 || end < start) return content;
+
+    const modelLabel = database === "prisma" ? "Model" : "Collection";
+    const rows = CORE_MODELS[database].map(([name, source]) => `| ${name} | ${source} |`);
+    const block = [
+        MODELS_MARKER_START,
+        `| ${modelLabel} | Source |`,
+        "| --- | --- |",
+        ...rows,
+        MODELS_MARKER_END,
+    ].join("\n");
+
+    return content.slice(0, start) + block + content.slice(end + MODELS_MARKER_END.length);
 }
 
 /** The project name from `package.json`, falling back to the folder name. */

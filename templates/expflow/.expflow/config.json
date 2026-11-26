@@ -22,6 +22,7 @@
     "propose": true,
     "apply": true,
     "verify": true,
-    "archive": true
+    "archive": true,
+    "sync": true
   }
 }

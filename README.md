@@ -24,6 +24,7 @@ This tool helps developers quickly scaffold `clean`, `modular` `Express` APIs wi
 - 🚀 One command project setup
 - 🔄 Add modules anytime
 - 🤖 Agent-independent AI workflow (`ExpFlow`)
+- 🧠 Project knowledge base with selective context loading and `ai sync`
 - 📦 Zero boilerplate setup
 
 ## 📋 Requirements
@@ -117,17 +118,28 @@ This adds:
 ```text
 .expflow/
 ├── config.json
+├── context/
+│   ├── project.md
+│   ├── architecture.md
+│   ├── modules.md
+│   ├── modules/*.md          # auth, profile, queue, email, storage, ...
+│   └── database/schema-overview.md
 ├── rules/backend.md
 ├── workflows/
 │   ├── propose.md
 │   ├── apply.md
 │   ├── verify.md
-│   └── archive.md
+│   ├── archive.md
+│   └── sync.md
 └── changes/
 .opencode/commands/          # OpenCode adapters
 .agents/skills/              # Antigravity skills
 AGENTS.md                    # short global instructions
 ```
+
+The context folder is the project knowledge base. Agents read `modules.md` first
+and then load only the context documents relevant to the current task. Context is
+documentation; the source code and schemas remain the actual truth.
 
 Then use the same slash commands in any supported agent:
 
@@ -136,6 +148,7 @@ Then use the same slash commands in any supported agent:
 /apply referral-system
 /verify referral-system
 /archive referral-system
+/sync
 ```
 
 The lifecycle is:
@@ -145,16 +158,35 @@ The lifecycle is:
 2. `/apply <id>` is the explicit approval and implements the proposed tasks.
 3. `/verify <id>` runs the project's own checks and writes `verification.md`.
 4. `/archive <id>` moves a passed change to `.expflow/archive/<id>/`.
+5. `/sync` refreshes context documentation when modules, routes or schemas change.
+
+### Sync project context
+
+The CLI can compare the context documents with the actual source tree:
+
+```bash
+npx exp-node-server ai sync          # write a report, change nothing
+npx exp-node-server ai sync --apply  # update managed tables and create missing stubs
+```
+
+`ai sync` detects modules, routes and database models. It updates only the managed
+blocks in `context/modules.md` and `context/database/schema-overview.md`, creates
+stubs for modules that have no context yet, and writes the full report to
+`.expflow/context/sync-report.md`. It never overwrites a context document you have
+written and never modifies source code.
 
 `ai init` detects the database from `.projectrc.json`. Outside a generated
 project, pass `--database <mongoose|prisma>`. Existing files are never deleted:
 conflicting managed files are reported, and `--force` replaces only managed files
 after backing them up to `.exp-node-server/backups/`. An existing `AGENTS.md`
-keeps its own content; the ExpFlow block is appended in place.
+keeps its own content; the ExpFlow block is appended in place. `ai sync` follows
+the same rule: it reports drift first and only updates its own managed sections.
 
 ```bash
 npx exp-node-server ai init --database mongoose
 npx exp-node-server ai init --force
+npx exp-node-server ai sync
+npx exp-node-server ai sync --apply
 ```
 
 ## 🧩 Generate a Module
@@ -219,17 +251,20 @@ refused.
 npx exp-node-server create <project-name> [--template <mongoose|prisma>]
 npx exp-node-server generate <module-name> [--auth] [--force]
 npx exp-node-server ai init [--database <mongoose|prisma>] [--force]
+npx exp-node-server ai sync [--apply]
 
 Commands
   create, -c <name>      Create a new project from a template
   generate, -g <name>    Generate a module in the current project
-  ai init                Add the ExpFlow AI workflow to the current project
+  ai init                Add the ExpFlow AI workflow and project context
+  ai sync                Check project context against the source code
 
 Options
   -t, --template <name>  Template to use with create (mongoose | prisma)
   -a, --auth             Generated routes require a signed-in user (default: public)
   -f, --force            Overwrite an existing module, or refresh managed ExpFlow files
       --database <name>  Database for ai init (default: from .projectrc.json)
+      --apply            Apply the context changes proposed by ai sync
   -h, --help             Show help
   -v, --version          Show version
 ```
@@ -247,6 +282,9 @@ Options
 - **Safe AI init:** `ai init` never deletes user files. Conflicting managed files
   are reported instead of overwritten; `--force` replaces only managed files after
   backing them up. Change artifacts and an existing `AGENTS.md` are preserved.
+- **Safe context sync:** `ai sync` only writes a report by default. `--apply`
+  updates managed registry/model sections and creates missing stubs; user-written
+  context documents are never overwritten.
 - **No clashes:** a module name whose URL is already used by another router (e.g.
   `auth`) is refused.
 - **Validated input only:** generated services receive `req.body` after

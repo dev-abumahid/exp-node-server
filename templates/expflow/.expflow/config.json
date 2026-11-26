@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": 1,
+  "project": {
+    "name": "",
+    "framework": "express",
+    "language": "typescript",
+    "architecture": "modular"
+  },
+  "database": {
+    "provider": "prisma"
+  },
+  "validation": {
+    "tool": "zod"
+  },
+  "workflow": {
+    "requireApprovalBeforeApply": true,
+    "requireVerificationBeforeArchive": true,
+    "allowQuickChanges": true
+  },
+  "commands": {
+    "propose": true,
+    "apply": true,
+    "verify": true,
+    "archive": true
+  }
+}

@@ -57,4 +57,23 @@ describe("cli (bundled)", () => {
             fs.rmSync(tmp, { recursive: true, force: true });
         }
     });
+
+    it("initializes the ExpFlow workflow in a generated project", () => {
+        const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "exp-node-server-expflow-"));
+        try {
+            expect(runCli(["create", "ai-demo", "--template", "mongoose"], tmp).status).toBe(0);
+            const project = path.join(tmp, "ai-demo");
+
+            const r = runCli(["ai", "init"], project);
+            expect(r.status).toBe(0);
+
+            const config = JSON.parse(fs.readFileSync(path.join(project, ".expflow/config.json"), "utf-8"));
+            expect(config.project.name).toBe("ai-demo");
+            expect(config.database.provider).toBe("mongoose");
+            expect(fs.existsSync(path.join(project, ".opencode/commands/propose.md"))).toBe(true);
+            expect(fs.existsSync(path.join(project, ".agents/skills/verify/SKILL.md"))).toBe(true);
+        } finally {
+            fs.rmSync(tmp, { recursive: true, force: true });
+        }
+    });
 });

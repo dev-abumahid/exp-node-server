@@ -8,6 +8,9 @@ export interface FileSpec {
     content: string;
 }
 
+/** Where `--force` keeps the previous versions of overwritten files. */
+export const BACKUP_ROOT = ".exp-node-server/backups";
+
 export interface WriteOptions {
     /** Copy existing files that are about to change into this folder first. */
     backupDir?: string | undefined;

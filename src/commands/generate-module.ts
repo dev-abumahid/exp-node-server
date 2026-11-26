@@ -16,7 +16,7 @@ import { injectRoute, listRegisteredRoutes } from "../injectors/route.js";
 import type { InjectResult } from "../injectors/source.js";
 import { injectSwagger } from "../injectors/swagger.js";
 import { CliError } from "../lib/errors.js";
-import { type FileSpec, writeFiles } from "../lib/fs.js";
+import { BACKUP_ROOT, type FileSpec, writeFiles } from "../lib/fs.js";
 import { logger } from "../lib/logger.js";
 import { getProjectType } from "../lib/project-config.js";
 
@@ -123,9 +123,6 @@ export async function generateModule(
 }
 
 const TEST_CONFIGS = ["vitest.config.ts", "vitest.config.mts", "vitest.config.js"];
-
-/** Where `--force` keeps the previous versions of overwritten files. */
-export const BACKUP_ROOT = ".exp-node-server/backups";
 
 /**
  * Refuses a module whose URL is already taken, e.g. `-g auth` next to the

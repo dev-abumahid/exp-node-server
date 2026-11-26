@@ -1,5 +1,6 @@
 import chalk from "chalk";
 import { parseArgs } from "node:util";
+import { initAIWorkflow } from "./commands/ai/init.js";
 import { createProject } from "./commands/create-project.js";
 import { generateModule } from "./commands/generate-module.js";
 import { CliError } from "./lib/errors.js";
@@ -14,15 +15,18 @@ ${chalk.bold(BIN)} - scaffold Express + TypeScript APIs with Mongoose or Prisma
 ${chalk.bold("Usage")}
   npx ${BIN} create <project-name> [--template <mongoose|prisma>]
   npx ${BIN} generate <module-name> [--auth] [--force]
+  npx ${BIN} ai init [--database <mongoose|prisma>] [--force]
 
 ${chalk.bold("Commands")}
   create, -c <name>      Create a new project from a template
   generate, -g <name>    Generate a module in the current project
+  ai init                Add the ExpFlow AI workflow to the current project
 
 ${chalk.bold("Options")}
   -t, --template <name>  Template to use with create (${DATABASES.join(" | ")})
   -a, --auth             Generated routes require a signed-in user (default: public)
-  -f, --force            Overwrite an existing module when generating
+  -f, --force            Overwrite an existing module, or refresh managed ExpFlow files
+      --database <name>  Database for ai init (default: from .projectrc.json)
   -h, --help             Show this help
   -v, --version          Show version
 
@@ -31,12 +35,21 @@ ${chalk.bold("Examples")}
   npx ${BIN} create my-api --template prisma
   npx ${BIN} -g order
   npx ${BIN} -g order --auth
+  cd my-api && npx ${BIN} ai init
 `;
 
-type Command = { kind: "create"; name: string | undefined } | { kind: "generate"; name: string | undefined };
+type Command =
+    | { kind: "create"; name: string | undefined }
+    | { kind: "generate"; name: string | undefined }
+    | { kind: "ai"; action: string | undefined };
+
+export interface RunOptions {
+    /** Directory commands operate on. Defaults to `process.cwd()`. */
+    cwd?: string;
+}
 
 /** Parses argv and runs the requested command. Throws `CliError` on bad input. */
-export async function run(argv: string[]): Promise<void> {
+export async function run(argv: string[], { cwd = process.cwd() }: RunOptions = {}): Promise<void> {
     const { values, positionals } = parse(argv);
 
     if (values.version) {
@@ -49,6 +62,35 @@ export async function run(argv: string[]): Promise<void> {
     if (values.help || !command) {
         console.log(HELP);
         return;
+    }
+
+    if (command.kind === "ai") {
+        if (values.auth) throw new CliError("--auth only applies to generate.");
+        if (values.template !== undefined) throw new CliError("--template only applies to create.");
+
+        if (command.action !== "init") {
+            throw new CliError(
+                command.action
+                    ? `Unknown ai command '${command.action}'. Try: ${BIN} ai init`
+                    : `ai requires a subcommand. Try: ${BIN} ai init`,
+            );
+        }
+
+        const { database } = values;
+        if (database !== undefined && !isDatabase(database)) {
+            throw new CliError(`Unknown database '${database}'. Use one of: ${DATABASES.join(", ")}.`);
+        }
+
+        await initAIWorkflow({
+            cwd,
+            force: values.force ?? false,
+            ...(database !== undefined ? { database } : {}),
+        });
+        return;
+    }
+
+    if (values.database !== undefined) {
+        throw new CliError("--database only applies to ai init.");
     }
 
     if (command.kind === "create") {
@@ -69,7 +111,7 @@ export async function run(argv: string[]): Promise<void> {
             throw new CliError(`Unknown template '${template}'. Use one of: ${DATABASES.join(", ")}.`);
         }
 
-        await createProject(projectName, { template });
+        await createProject(projectName, { template, cwd });
         return;
     }
 
@@ -82,7 +124,7 @@ export async function run(argv: string[]): Promise<void> {
         );
     }
 
-    await generateModule(moduleName, { force: values.force ?? false, auth: values.auth ?? false });
+    await generateModule(moduleName, { force: values.force ?? false, auth: values.auth ?? false, cwd });
 }
 
 function parse(argv: string[]) {
@@ -95,6 +137,7 @@ function parse(argv: string[]) {
                 create: { type: "string", short: "c" },
                 generate: { type: "string", short: "g" },
                 template: { type: "string", short: "t" },
+                database: { type: "string" },
                 force: { type: "boolean", short: "f" },
                 auth: { type: "boolean", short: "a" },
                 help: { type: "boolean", short: "h" },
@@ -134,6 +177,8 @@ function resolveCommand(
         case "generate":
         case "g":
             return { kind: "generate", name };
+        case "ai":
+            return { kind: "ai", action: name };
         default:
             throw new CliError(`Unknown command '${sub}'. Run '${BIN} --help' for usage.`);
     }

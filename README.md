@@ -23,6 +23,7 @@ This tool helps developers quickly scaffold `clean`, `modular` `Express` APIs wi
 - 🏗️ `Modular` clean architecture
 - 🚀 One command project setup
 - 🔄 Add modules anytime
+- 🤖 Agent-independent AI workflow (`ExpFlow`)
 - 📦 Zero boilerplate setup
 
 ## 📋 Requirements
@@ -98,6 +99,64 @@ my-api/
 └── .env.example
 ```
 
+## 🤖 AI Workflow (ExpFlow)
+
+ExpFlow is a spec-driven workflow for AI agents. The canonical rules and
+workflows live in `.expflow/`; OpenCode and Antigravity get thin adapters, so the
+workflow is never duplicated between agents. It is Markdown-only: no AI API key
+and no extra dependency is required.
+
+Inside a generated project run:
+
+```bash
+npx exp-node-server ai init
+```
+
+This adds:
+
+```text
+.expflow/
+├── config.json
+├── rules/backend.md
+├── workflows/
+│   ├── propose.md
+│   ├── apply.md
+│   ├── verify.md
+│   └── archive.md
+└── changes/
+.opencode/commands/          # OpenCode adapters
+.agents/skills/              # Antigravity skills
+AGENTS.md                    # short global instructions
+```
+
+Then use the same slash commands in any supported agent:
+
+```text
+/propose user referral system
+/apply referral-system
+/verify referral-system
+/archive referral-system
+```
+
+The lifecycle is:
+
+1. `/propose` writes `.expflow/changes/<id>/proposal.md` and `tasks.md`. No source
+   code is changed.
+2. `/apply <id>` is the explicit approval and implements the proposed tasks.
+3. `/verify <id>` runs the project's own checks and writes `verification.md`.
+4. `/archive <id>` moves a passed change to `.expflow/archive/<id>/`.
+
+`ai init` detects the database from `.projectrc.json`. Outside a generated
+project, pass `--database <mongoose|prisma>`. Existing files are never deleted:
+conflicting managed files are reported, and `--force` replaces only managed files
+after backing them up to `.exp-node-server/backups/`. An existing `AGENTS.md`
+keeps its own content; the ExpFlow block is appended in place.
+
+```bash
+npx exp-node-server ai init --database mongoose
+npx exp-node-server ai init --force
+```
+
 ## 🧩 Generate a Module
 
 Inside your project root run:
@@ -159,15 +218,18 @@ refused.
 ```text
 npx exp-node-server create <project-name> [--template <mongoose|prisma>]
 npx exp-node-server generate <module-name> [--auth] [--force]
+npx exp-node-server ai init [--database <mongoose|prisma>] [--force]
 
 Commands
   create, -c <name>      Create a new project from a template
   generate, -g <name>    Generate a module in the current project
+  ai init                Add the ExpFlow AI workflow to the current project
 
 Options
   -t, --template <name>  Template to use with create (mongoose | prisma)
   -a, --auth             Generated routes require a signed-in user (default: public)
-  -f, --force            Overwrite an existing module when generating
+  -f, --force            Overwrite an existing module, or refresh managed ExpFlow files
+      --database <name>  Database for ai init (default: from .projectrc.json)
   -h, --help             Show help
   -v, --version          Show version
 ```
@@ -182,6 +244,9 @@ Options
 - **`--force` keeps backups:** files it overwrites are copied first to
   `.exp-node-server/backups/<timestamp>/` (ignored by git, ESLint and Prettier).
   Files that wouldn't change are left alone.
+- **Safe AI init:** `ai init` never deletes user files. Conflicting managed files
+  are reported instead of overwritten; `--force` replaces only managed files after
+  backing them up. Change artifacts and an existing `AGENTS.md` are preserved.
 - **No clashes:** a module name whose URL is already used by another router (e.g.
   `auth`) is refused.
 - **Validated input only:** generated services receive `req.body` after

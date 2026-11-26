@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.2.0
+
+### Added
+
+- `exp-node-server ai init`: installs ExpFlow, an agent-independent workflow for
+  backend features (`/propose` → `/apply` → `/verify` → `/archive`).
+- `.expflow/` template with project config, backend engineering rules, the four
+  canonical workflows and a `changes/` folder for per-feature artifacts.
+- OpenCode adapters in `.opencode/commands/` and Antigravity skills in
+  `.agents/skills/`; both delegate to the same `.expflow/workflows/` files.
+- `ai init` detects the database from `.projectrc.json`; `--database` overrides it
+  outside a generated project.
+- Safe initialization: existing files are never deleted. Conflicting managed files
+  are reported, `--force` replaces them after backing them up, change artifacts are
+  preserved, and an existing `AGENTS.md` keeps its content with the ExpFlow block
+  appended.
+- Test coverage for the template, initialization, conflict handling and the bundled
+  CLI.
+
+### Changed
+
+- The `--force` backup location is now shared by module generation and `ai init`.
+
 ## 2.1.0
 
 ### Added
